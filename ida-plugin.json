@@ -1,0 +1,26 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "DBImporter",
+    "entryPoint": "plugin_main.py",
+    "description" : "A plugin to import data from all sorts of reverse engineering tools",
+    "categories": [
+      "integration-with-third-parties-interoperability"
+    ],
+    "urls": {
+      "repository": "https://github.com/HexRaysSA/ida-dbimporter"
+    },
+    "version": "0.0.1",
+    "authors": [
+      {
+        "name": "bbudny-hexrays",
+        "email": "bbudny@hex-rays.com"
+      }
+    ],
+    "keywords": [
+      "ghidra",
+      "import"
+    ],
+    "logoPath": "logo.png"
+  }
+}
