@@ -51,7 +51,7 @@ with ida_domain.Database.open(path="/path/to/sample") as db:
     ida_dbimporter.import_file_into_ida("/path/to/json")
 ```
 
-For a more detailed usage guide see [usage.md](usage.md)
+For a more detailed usage guide see [USAGE.md](USAGE.md)
 
 ## The IDA DBImporter json schema
 
