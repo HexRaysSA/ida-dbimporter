@@ -13,8 +13,8 @@
     "version": "0.0.1",
     "authors": [
       {
-        "name": "bbudny-hexrays",
-        "email": "bbudny@hex-rays.com"
+        "name": "Hex-Rays SA",
+        "email": "plugins@hex-rays.com"
       }
     ],
     "keywords": [
