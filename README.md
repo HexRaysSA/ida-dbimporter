@@ -6,7 +6,7 @@
 A plugin for importing various reverse engineering database formats into IDA
 
 This project aims to create a format rich in information that can be used to import data from other reverse-engineering tools into IDA, or vice-versa
-At the moment the tool only supports Ghidra XML conversion, but it also has its own IR format (read on further) which makes it easy to create custom format conversion tools (all you need to do is generate some JSON!)
+At the moment the tool supports converting Ghidra XML and exporting data from IDA into its own IR format (read on further) which makes it easy to create custom format conversion tools (all you need to do is generate some JSON!)
 
 ![Image depicting data from Ghidra being imported into IDA](showcase.png)
 
@@ -158,18 +158,27 @@ An entry in the `datatypes` table can take on multiple forms depending on its ty
 
 "ENUM NAME": {
     "type": "enum",
+    // either programmatically:
     "size": "SIZE",
     "entries": {
         "ENUM ENTRY NAME": "ENUM ENTRY VALUE"
     }
-
+    // or, via text:
+    "decl": "ENUM DECLARATION HERE"
 }
 ```
 
 Since the format is in its infancy, we strongly encourage you to leave feedback, especially about any issues that you encounter. Ease of use and accessibility are our priority.
 
 ## Dependencies
-No dependencies required, the project is entirely self-contained! To use it in headless IDA scripts, you will need [IDA Domain](https://ida-domain.docs.hex-rays.com), though.
+This project uses the `regex` library for better regex support.
+Install the dependencies like so:
+```shell
+pip install -r requirements.txt
+```
+,preferably in a python virtual environment
+
+To use it in headless IDA scripts, you will need [IDA Domain](https://ida-domain.docs.hex-rays.com), too.
 
 ## Contributing
 

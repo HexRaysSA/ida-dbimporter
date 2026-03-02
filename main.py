@@ -24,6 +24,11 @@ parser.add_argument(
     "Can be an existing IDA database or a new binary",
 )
 
+parser.add_argument(
+    "-E",
+    "--export",
+    help="Export IDB/binary to DBI JSON format database",
+)
 args = parser.parse_args(sys.argv[1:])
 
 if args.make_idb:

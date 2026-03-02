@@ -72,6 +72,14 @@ def PLUGIN_ENTRY():
     return DBImporterPlug()
 
 
+def export_handler(_):
+    if not form_export.Execute():
+        return
+
+    ida_dbimporter.exporter.export_to_file(form_export.db_filepath.value)
+    ida_kernwin.warning(f"Exported info to {form_export.db_filepath.value}")
+
+
 form_main = ida_kernwin.Form(
     r"""DBImporter
     <Database file: {db_filepath}>
@@ -85,7 +93,10 @@ form_main = ida_kernwin.Form(
     <Import segments: {import_segs}>
     <Import typed data: {import_typed_data}>
 
-    <Overwrite user-defined information: {overwrite_data}>{toggles}>""",
+    <Overwrite user-defined information: {overwrite_data}>
+    <Use clang type parser (experimental): {use_clang}>{toggles}>
+
+    <Export IDA database to DBI file: {export}>""",
     {
         "db_filepath": ida_kernwin.Form.FileInput(value="*.json;*.xml", open=True),
         "base_ea": ida_kernwin.Form.NumericInput(),
@@ -99,8 +110,10 @@ form_main = ida_kernwin.Form(
                 "import_segs",
                 "import_typed_data",
                 "overwrite_data",
+                "use_clang",
             )
         ),
+        "export": ida_kernwin.Form.ButtonInput(export_handler),
     },
 )
 
@@ -141,3 +154,48 @@ form_ghidra.Compile()
 
 form_ghidra.only_user_defined_syms.checked = True
 form_ghidra.use_ghidra_callconvs.checked = False
+
+form_export = ida_kernwin.Form(
+    # <Base export address: {base_ea}>
+    r"""DBImporter Export
+    <Output file: {db_filepath}>
+
+    <Export functions: {export_fns}>
+    <Export comments: {export_cmts}>
+    <Export types: {export_types}>
+    <Export names: {export_names}>
+    <Export bookmarks: {export_marks}>
+    <Export segments: {export_segs}>
+    <Export typed data: {export_typed_data}>
+
+
+    <Don't filter templated typenames (requires clang parser to parse, experimental): {no_filter_templates}>{toggles}>""",
+    {
+        "db_filepath": ida_kernwin.Form.FileInput(value="*.json", save=True),
+        # "base_ea": ida_kernwin.Form.NumericInput(),
+        "toggles": ida_kernwin.Form.ChkGroupControl(
+            (
+                "export_fns",
+                "export_cmts",
+                "export_types",
+                "export_names",
+                "export_marks",
+                "export_segs",
+                "export_typed_data",
+                "no_filter_templates",
+            )
+        ),
+    },
+)
+
+form_export.Compile()
+
+form_export.export_fns.checked = True
+form_export.export_cmts.checked = True
+form_export.export_types.checked = True
+form_export.export_names.checked = True
+form_export.export_marks.checked = True
+form_export.export_segs.checked = True
+form_export.export_typed_data.checked = True
+
+form_export.no_filter_templates.checked = False

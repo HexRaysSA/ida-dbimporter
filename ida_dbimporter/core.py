@@ -1,6 +1,7 @@
 import json
 import math
 import re
+import regex
 
 
 def import_ida_mods() -> None:
@@ -37,8 +38,11 @@ base_dict = {
 datatypes = {}
 ida_base_ea = 0
 
-re_fndecl = re.compile("([a-zA-Z0-9_:]+)(?:[* ]*)(?:[a-zA-Z0-9_:]+)?")
-re_delims = re.compile(r"[\s,*&()<>\[\]{},]")
+
+re_delims = regex.compile(
+    r"[^\s,*&()<>\[\]{},;]+(<[^<>]*(?1)?[^<>]*>?)*>?[^\s,*&()<>\[\]{},;]*"
+)
+
 re_bitfield = re.compile(r"(^.*):(\d*)$")
 
 import_stack: list[str] = []
@@ -56,6 +60,7 @@ class ImportSettings:
     import_typed_data = True
 
     overwrite = True
+    use_clang = False
 
 
 def dict_to_json(data: dict) -> str:
@@ -182,7 +187,8 @@ def import_function(fn_ea: int, info: dict) -> None:
     fn_ti = ida_typeinf.tinfo_t()
 
     if "decl" in info:
-        if fn_ti.parse(info["decl"], pt_flags=ida_typeinf.PT_SIL) is True:
+        fn_ti = datatype_to_tinfo(info["decl"])
+        if fn_ti is not None:
             ida_typeinf.apply_tinfo(
                 fn_ea,
                 fn_ti,
@@ -318,19 +324,26 @@ def import_datatype(name: str) -> bool:
             if enum_ti is not None:
                 return True
 
-            # IDA enum size = 1 << (n - 1)
-            enum_size = int(info["size"], 0x10)
-            enum_size_exp = int(math.log2(enum_size)) + 1
-            if ti.create_enum(enum_size_exp | ida_typeinf.BTE_HEX) is not True:
-                ida_kernwin.warning(f"Bad enum size: {name}, {enum_size}")
-                return False
+            if "decl" in info:
+                ti = datatype_to_tinfo(info["decl"])
+                if ti is None:
+                    return False
+            else:
+                # IDA enum size = 1 << (n - 1)
+                enum_size = int(info["size"], 0x10)
+                enum_size_exp = int(math.log2(enum_size)) + 1
+                if ti.create_enum(enum_size_exp | ida_typeinf.BTE_HEX) is not True:
+                    ida_kernwin.warning(f"Bad enum size: {name}, {enum_size}")
+                    return False
 
-            for entry_name, entry_value in info["entries"].items():
-                e_val_int = int(entry_value, 0x10)
-                check_terr(
-                    ti.add_edm(entry_name, e_val_int, -1, ida_typeinf.ETF_FORCENAME),
-                    f"Adding enum value {entry_name}",
-                )
+                for entry_name, entry_value in info["entries"].items():
+                    e_val_int = int(entry_value, 0x10)
+                    check_terr(
+                        ti.add_edm(
+                            entry_name, e_val_int, -1, ida_typeinf.ETF_FORCENAME
+                        ),
+                        f"Adding enum value {entry_name}",
+                    )
 
             return check_terr(
                 ti.set_named_type(None, name, ida_typeinf.NTF_REPLACE),
@@ -339,7 +352,7 @@ def import_datatype(name: str) -> bool:
 
         case "function":
             if "decl" in info:
-                ti = get_fn_tinfo_parse(info["decl"])
+                ti = datatype_to_tinfo(info["decl"])
             else:
                 ti = get_fn_tinfo_programmatic(info)
 
@@ -377,9 +390,12 @@ def datatype_to_tinfo(datatype: str, size: int | None = None):
         return ti
 
     # import whatever we can find in the decl string
-    for word in re_delims.split(datatype):
+    m: regex.Match = re_delims.search(datatype)
+    while m is not None:
+        word = datatype[m.start() : m.end()]
         if word in datatypes:
             import_datatype(word)
+        m = re_delims.search(datatype, pos=m.end())
 
     # can we now?
     if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
@@ -426,10 +442,7 @@ def get_struct_or_union_ti(info: dict, union=False) -> "ida_typeinf.tinfo_t":
     ti = ida_typeinf.tinfo_t()
 
     if "decl" in info:
-        if not ti.parse(info["decl"], pt_flags=ida_typeinf.PT_SIL):
-            return None
-
-        return ti
+        return datatype_to_tinfo(info["decl"])
 
     udt_td = ida_typeinf.udt_type_data_t()
     udt_td.is_union = union
@@ -441,23 +454,6 @@ def get_struct_or_union_ti(info: dict, union=False) -> "ida_typeinf.tinfo_t":
         return None
 
     return ti
-
-
-def get_fn_tinfo_parse(fn_decl: str) -> "ida_typeinf.tinfo_t":
-    fn_ti = ida_typeinf.tinfo_t()
-    # purpose: extract all types from a function declaration
-    # so we can recursively import them all from the string
-    fn_types = re_fndecl.findall(fn_decl)
-
-    for ftype in fn_types:
-        if fn_ti.parse(ftype, pt_flags=ida_typeinf.PT_SIL) is False:
-            if ftype in datatypes:
-                import_datatype(ftype)
-
-    if fn_ti.parse(fn_decl, pt_flags=ida_typeinf.PT_SIL) is False:
-        raise Exception(f"Failed to parse function '{fn_decl}'")
-
-    return fn_ti
 
 
 def get_fn_tinfo_programmatic(fn_data: dict) -> "ida_typeinf.tinfo_t":

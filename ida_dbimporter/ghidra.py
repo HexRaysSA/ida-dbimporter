@@ -1,6 +1,8 @@
 import xml.dom.minidom
 import re
 
+from copy import deepcopy
+
 import ida_dbimporter
 
 image_base = 0
@@ -119,7 +121,7 @@ def parse_xml(
     global conv_settings
     conv_settings = conversion_settings
 
-    result = ida_dbimporter.core.base_dict
+    result = deepcopy(ida_dbimporter.core.base_dict)
 
     program = xmlobj.getElementsByTagName("PROGRAM")[0]
 
