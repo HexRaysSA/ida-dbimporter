@@ -181,3 +181,7 @@ black .
 flake8 .
 ```
 \**Note: if you're using a python Virtual ENVironment, you will want to run flake8 with the argument '--exclude NAME_OF_VENV', otherwise it will try to stylecheck venv files which is not helpful :)*
+
+## License
+
+MIT
