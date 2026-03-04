@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ida-dbimporter"
+description = "A plugin for importing various reverse engineering database formats into IDA"
+authors = [{ name = "Hex-Rays SA", email = "support@hex-rays.com" }]
+keywords = ["ida", "ida-pro", "reverse-engineering", "disassembler", "binary-analysis", "database", "import"]
+readme = "readme.md"
+dynamic = ["version"]
+license = "MIT"
+requires-python = ">=3.9"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "ida_dbimporter.version.__version__" }
+
+[project.optional-dependencies]
+dev = [
+    "black==26.1.0",
+    "flake8==7.3.0",
+]
+
+[project.urls]
+Homepage = "https://hex-rays.com/"
+Repository = "https://github.com/HexRaysSA/ida-dbimporter"
+Issues = "https://github.com/HexRaysSA/ida-dbimporter/issues"
+
+[tool.setuptools]
+packages = ["ida_dbimporter"]
