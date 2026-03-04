@@ -281,7 +281,7 @@ def get_namespace_prefix(ns: str, delim: str, newdelim: str | None = None) -> st
     if newdelim is None:
         newdelim = delim
 
-    namespace_prefix = newdelim.join(ns.split(delim)[conv_settings.keep_namespaces:])
+    namespace_prefix = newdelim.join(ns.split(delim)[conv_settings.keep_namespaces :])
 
     if len(namespace_prefix) > 0 and not namespace_prefix.endswith(newdelim):
         namespace_prefix += newdelim

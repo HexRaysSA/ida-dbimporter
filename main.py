@@ -6,7 +6,7 @@ import ida_dbimporter
 parser = argparse.ArgumentParser(
     prog="dbimporter",
     description="A tool to import data from "
-                "all sorts of reverse engineering tools into IDA",
+    "all sorts of reverse engineering tools into IDA",
 )
 
 parser.add_argument("input_file")
@@ -21,7 +21,7 @@ parser.add_argument(
     "-idbb",
     "--idb-base",
     help="File that the IDA database should be based on. "
-         "Can be an existing IDA database or a new binary",
+    "Can be an existing IDA database or a new binary",
 )
 
 args = parser.parse_args(sys.argv[1:])
