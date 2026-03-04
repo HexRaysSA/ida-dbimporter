@@ -438,7 +438,7 @@ def get_struct_or_union_ti(info: dict, union=False) -> "ida_typeinf.tinfo_t":
         add_member(udt_td, member)
 
     if not ti.create_udt(udt_td, ida_typeinf.BTF_UNION):
-        wlog(f"Failed to create udt: {name}")
+        wlog(f"Failed to create udt: {member['name']}")
         return None
 
     return ti
