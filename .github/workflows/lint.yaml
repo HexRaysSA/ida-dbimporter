@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: pip install black==26.1.0 flake8==7.3.0
+      - run: pip install .[dev]
 
       - run: black --check .
 
