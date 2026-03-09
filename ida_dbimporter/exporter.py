@@ -9,8 +9,6 @@ re_delims = re.compile(r"[\s,*&()<>\[\]{};]")
 
 
 class ExportSettings:
-    # base_ea_override: None | int = None
-
     export_fns = True
     export_cmts = True
     export_types = True
@@ -24,6 +22,7 @@ class ExportSettings:
 
 
 export_settings = ExportSettings()
+
 
 def normalize_templates(typename: str) -> str:
     return re_templates.sub(lambda x: re_delims.sub("_", x.group(0)), typename)
@@ -205,8 +204,8 @@ def export_function(fn: "ida_funcs.func_t") -> dict:
     if fn.get_prototype() is not None:
         fn_entry["decl"] = str(fn.get_prototype())
 
-    if not export_settings.no_filter_templates:
-        fn_entry = normalize_templates(fn_entry)
+    if not export_settings.no_filter_templates and "decl" in fn_entry:
+        fn_entry["decl"] = normalize_templates(fn_entry["decl"])
 
     fo = fn.get_frame_object()
     if fo is not None:
@@ -224,7 +223,7 @@ def export_function(fn: "ida_funcs.func_t") -> dict:
                 None,
                 None,
             )
-            
+
             if not export_settings.no_filter_templates:
                 type = normalize_templates(type)
 

@@ -23,13 +23,14 @@ class DBImporter(ida_idaapi.plugmod_t):
         i_settings.import_segs = form_main.import_segs.checked
 
         i_settings.overwrite = form_main.overwrite_data.checked
+        i_settings.use_clang = form_main.use_clang.checked
 
-        db_type = db_filepath.split(".")[-1]
+        db_type = ida_dbimporter.detect_db_format(db_filepath)
 
         dbi_data = {}
 
         match db_type:
-            case "xml":
+            case "ghidra_xml":
                 if not form_ghidra.Execute():
                     return
 
@@ -49,7 +50,7 @@ class DBImporter(ida_idaapi.plugmod_t):
                 dbi_data = ida_dbimporter.ghidra.parse_file(
                     db_filepath, conversion_settings=gxml_settings
                 )
-            case "json":
+            case "dbi_json":
                 dbi_data = ida_dbimporter.parse_file(db_filepath)
             case _:
                 return
@@ -94,7 +95,7 @@ form_main = ida_kernwin.Form(
     <Import typed data: {import_typed_data}>
 
     <Overwrite user-defined information: {overwrite_data}>
-    <Use clang type parser (experimental): {use_clang}>{toggles}>
+    <Use clang type parser (slow, experimental): {use_clang}>{toggles}>
 
     <Export IDA database to DBI file: {export}>""",
     {
@@ -169,7 +170,8 @@ form_export = ida_kernwin.Form(
     <Export typed data: {export_typed_data}>
 
 
-    <Don't filter templated typenames (requires clang parser to parse, experimental): {no_filter_templates}>{toggles}>""",
+    <Don't filter templated typenames (requires clang parser to parse, experimental):"""
+    """{no_filter_templates}>{toggles}>""",
     {
         "db_filepath": ida_kernwin.Form.FileInput(value="*.json", save=True),
         # "base_ea": ida_kernwin.Form.NumericInput(),

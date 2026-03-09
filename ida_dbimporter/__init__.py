@@ -6,9 +6,12 @@ from . import exporter
 # fmt: off
 from .core import (
     dict_to_json,
+    parse_file_auto,
     parse_file,
+    import_file_into_ida_auto,
     import_file_into_ida,
     import_data_into_ida,
+    detect_db_format,
     ImportSettings
 )
 # fmt: on

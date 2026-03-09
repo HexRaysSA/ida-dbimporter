@@ -7,7 +7,7 @@ import regex
 def import_ida_mods() -> None:
     global ida_moves, ida_idc, ida_idaapi, ida_ida, ida_typeinf, ida_name
     global ida_lines, ida_segment, ida_bytes, ida_funcs, ida_frame, ida_nalt
-    global ida_hexrays, ida_kernwin
+    global ida_hexrays, ida_kernwin, ida_srclang
     import ida_moves
     import ida_idc
     import ida_idaapi
@@ -22,6 +22,7 @@ def import_ida_mods() -> None:
     import ida_nalt
     import ida_hexrays
     import ida_kernwin
+    import ida_srclang
 
 
 base_dict = {
@@ -38,8 +39,8 @@ base_dict = {
 datatypes = {}
 ida_base_ea = 0
 
-
 re_delims = regex.compile(
+    # template aware regex
     r"[^\s,*&()<>\[\]{},;]+(<[^<>]*(?1)?[^<>]*>?)*>?[^\s,*&()<>\[\]{},;]*"
 )
 
@@ -72,6 +73,40 @@ def parse_file(filepath: str):
         return json.load(f)
 
 
+from . import ghidra
+
+fmt_parse_tbl = {
+    "ghidra_xml": (ghidra.parse_file, ghidra.parse_xml),
+    "dbi_json": (parse_file, json.loads),
+}
+
+
+def detect_db_format(filepath: str):
+    if filepath.endswith(".xml"):
+        return "ghidra_xml"
+    elif filepath.endswith(".json"):
+        return "dbi_json"
+
+    # if file has no extension we should identifity the format
+    # unfortunately full schema validation is slow, so we
+    # will probably have to think of something else
+
+    return None
+
+
+def parse_file_auto(filepath: str) -> dict:
+    fmt = detect_db_format(filepath)
+    if fmt is None:
+        return None
+    parse_fn = fmt_parse_tbl[fmt][0]
+    return parse_fn(filepath)
+
+
+def import_file_into_ida_auto(filepath: str, **kwargs):
+    dbi_data = parse_file_auto(filepath)
+    import_data_into_ida(dbi_data, **kwargs)
+
+
 def import_file_into_ida(filepath: str, **kwargs):
     dbi_data = parse_file(filepath)
     import_data_into_ida(dbi_data, **kwargs)
@@ -80,6 +115,14 @@ def import_file_into_ida(filepath: str, **kwargs):
 def import_data_into_ida(data: dict, import_settings=ImportSettings()):
     import_ida_mods()
 
+    old_parser = ida_srclang.get_selected_parser_name()
+
+    if len(old_parser) < 1:
+        old_parser = "legacy"
+
+    if import_settings.use_clang:
+        ida_srclang.select_parser_by_name("clang")
+
     global ida_base_ea
     ida_base_ea = (
         get_base_import_ea()
@@ -87,7 +130,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
         else import_settings.base_ea_override
     )
 
-    if import_settings.import_types:
+    if import_settings.import_types and "datatypes" in data:
         global datatypes
         datatypes = data["datatypes"]
         for name, info in datatypes.items():
@@ -99,7 +142,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog(f"Failed to import type {name}: {e}")
                 continue
 
-    if import_settings.import_names:
+    if import_settings.import_names and "names" in data:
         for addr, name in data["names"].items():
             try:
                 ea = int(addr, 0x10) + ida_base_ea
@@ -112,7 +155,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import name %s@%s: %s" % (name, addr, e))
                 continue
 
-    if import_settings.import_marks:
+    if import_settings.import_marks and "bookmarks" in data:
         for address, description in data["bookmarks"].items():
             try:
                 address = int(address, 0x10) + ida_base_ea
@@ -121,7 +164,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import bookmark @%X: %s" % (address, e))
                 continue
 
-    if import_settings.import_cmts:
+    if import_settings.import_cmts and "comments" in data:
         for address, comment in data["comments"].items():
             try:
                 address = int(address, 0x10) + ida_base_ea
@@ -137,7 +180,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import comment @%X: %s" % (address, e))
                 continue
 
-    if import_settings.import_fns:
+    if import_settings.import_fns and "functions" in data:
         for fn_ea, fn_info in data["functions"].items():
             try:
                 fn_ea_int = int(fn_ea, 0x10) + ida_base_ea
@@ -146,7 +189,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog(f"Failed to import function '{fn_ea}': {e}")
                 continue
 
-    if import_settings.import_segs:
+    if import_settings.import_segs and "segments" in data:
         for segment in data["segments"]:
             try:
                 import_segment(segment)
@@ -154,7 +197,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import segment %s: %s" % (segment["name"], e))
                 continue
 
-    if import_settings.import_typed_data:
+    if import_settings.import_typed_data and "typed_data" in data:
         for ea, type in data["typed_data"].items():
             try:
                 ea_int = int(ea, 0x10) + ida_base_ea
@@ -168,6 +211,8 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
             except Exception as e:
                 wlog("Failed to set datatype %s@%s: %s" % (type, ea, e))
             continue
+
+    ida_srclang.select_parser_by_name(old_parser)
 
 
 def wlog(msg: str) -> None:
