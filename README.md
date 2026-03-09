@@ -191,18 +191,6 @@ This project uses the `regex` library for better regex support.
 
 When installed through `pip` or `hcli`, the dependencies will be installed automatically with no user action required.
 
-If you still want to install them manually, do it like so:
-```shell
-# in project root dir
-# create a new venv, to not pollute the global install
-python -m venv venv
-# on posix sh/bash/etc
-source venv/bin/activate
-# on fish shell
-# source venv/bin/activate.fish
-pip install -r requirements.txt
-```
-
 To use it in headless IDA scripts, you will need [IDA Domain](https://ida-domain.docs.hex-rays.com), too.
 
 ## Contributing

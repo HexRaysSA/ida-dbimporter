@@ -14,6 +14,7 @@ class DBImporter(ida_idaapi.plugmod_t):
         i_settings = ida_dbimporter.ImportSettings()
 
         i_settings.base_ea_override = form_main.base_ea.value
+        i_settings.parser = form_main.parser[form_main.parser.value]
 
         i_settings.import_fns = form_main.import_fns.checked
         i_settings.import_cmts = form_main.import_cmts.checked
@@ -23,7 +24,6 @@ class DBImporter(ida_idaapi.plugmod_t):
         i_settings.import_segs = form_main.import_segs.checked
 
         i_settings.overwrite = form_main.overwrite_data.checked
-        i_settings.use_clang = form_main.use_clang.checked
 
         db_type = ida_dbimporter.detect_db_format(db_filepath)
 
@@ -78,13 +78,14 @@ def export_handler(_):
         return
 
     ida_dbimporter.exporter.export_to_file(form_export.db_filepath.value)
-    ida_kernwin.warning(f"Exported info to {form_export.db_filepath.value}")
+    ida_kernwin.info(f"Exported info to {form_export.db_filepath.value}")
 
 
 form_main = ida_kernwin.Form(
     r"""DBImporter
     <Database file: {db_filepath}>
     <Base import address: {base_ea}>
+    <Type parser: {parser}>
 
     <Import functions: {import_fns}>
     <Import comments: {import_cmts}>
@@ -94,8 +95,7 @@ form_main = ida_kernwin.Form(
     <Import segments: {import_segs}>
     <Import typed data: {import_typed_data}>
 
-    <Overwrite user-defined information: {overwrite_data}>
-    <Use clang type parser (slow, experimental): {use_clang}>{toggles}>
+    <Overwrite user-defined information: {overwrite_data}>{toggles}>
 
     <Export IDA database to DBI file: {export}>""",
     {
@@ -111,12 +111,28 @@ form_main = ida_kernwin.Form(
                 "import_segs",
                 "import_typed_data",
                 "overwrite_data",
-                "use_clang",
             )
         ),
         "export": ida_kernwin.Form.ButtonInput(export_handler),
+        "parser": ida_kernwin.Form.DropdownListControl(
+            items=["legacy", "clang_templates_only", "clang_always"]
+        ),
     },
 )
+
+form_main.Compile()
+
+form_main.base_ea.value = ida_dbimporter.core.get_base_import_ea()
+
+form_main.import_fns.checked = True
+form_main.import_cmts.checked = True
+form_main.import_types.checked = True
+form_main.import_names.checked = True
+form_main.import_marks.checked = True
+form_main.import_segs.checked = True
+form_main.import_typed_data.checked = True
+form_main.overwrite_data.checked = True
+
 
 form_ghidra = ida_kernwin.Form(
     r"""Ghidra XML import options
@@ -137,24 +153,11 @@ form_ghidra = ida_kernwin.Form(
     },
 )
 
-form_main.Compile()
-
-form_main.base_ea.value = ida_dbimporter.core.get_base_import_ea()
-
-form_main.import_fns.checked = True
-form_main.import_cmts.checked = True
-form_main.import_types.checked = True
-form_main.import_names.checked = True
-form_main.import_marks.checked = True
-form_main.import_segs.checked = True
-form_main.import_typed_data.checked = True
-form_main.overwrite_data.checked = True
-
-
 form_ghidra.Compile()
 
 form_ghidra.only_user_defined_syms.checked = True
 form_ghidra.use_ghidra_callconvs.checked = False
+
 
 form_export = ida_kernwin.Form(
     # <Base export address: {base_ea}>

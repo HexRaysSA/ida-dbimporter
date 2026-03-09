@@ -21,7 +21,16 @@ def main():
         description="A tool to import data from "
         "all sorts of reverse engineering tools into IDA",
     )
-
+    parser.add_argument(
+        "-p",
+        "--parser",
+        default="legacy",
+        choices=["legacy", "clang_templates_only", "clang_always"],
+        help="Set the type parser (default: %(default)s)"
+        "Legacy: default, fast. "
+        "Clang (templates only): use clang to parse templated types only. "
+        "Clang (always): Always use clang for type parsing (may fix some issues, slow)",
+    )
     parser.add_argument(
         "-i", "--input", nargs="*", help="Input file path, can be multiple files"
     )
@@ -85,7 +94,10 @@ def main():
             sys.exit(2)
 
         if len(dbi_data) > 0:
-            ida_dbimporter.import_data_into_ida(dbi_data)
+            i_settings = ida_dbimporter.ImportSettings()
+            i_settings.parser = args.parser
+
+            ida_dbimporter.import_data_into_ida(dbi_data, i_settings)
 
         if args.export is not None:
             ida_dbimporter.exporter.export_to_file(args.export)

@@ -61,7 +61,10 @@ class ImportSettings:
     import_typed_data = True
 
     overwrite = True
-    use_clang = False
+    parser = None
+
+
+import_settings = ImportSettings()
 
 
 def dict_to_json(data: dict) -> str:
@@ -112,15 +115,18 @@ def import_file_into_ida(filepath: str, **kwargs):
     import_data_into_ida(dbi_data, **kwargs)
 
 
-def import_data_into_ida(data: dict, import_settings=ImportSettings()):
+def import_data_into_ida(data: dict, settings=ImportSettings()):
     import_ida_mods()
+
+    global import_settings
+    import_settings = settings
 
     old_parser = ida_srclang.get_selected_parser_name()
 
     if len(old_parser) < 1:
         old_parser = "legacy"
 
-    if import_settings.use_clang:
+    if import_settings.parser == "clang_always":
         ida_srclang.select_parser_by_name("clang")
 
     global ida_base_ea
@@ -417,41 +423,58 @@ def check_terr(code: int, action: str) -> bool:
 
 
 def datatype_to_tinfo(datatype: str, size: int | None = None):
-    ti = ida_typeinf.tinfo_t()
+    old_parser = None
+    if import_settings.parser == "clang_templates_only" and (
+        "<" in datatype or ">" in datatype
+    ):
+        old_parser = ida_srclang.get_selected_parser_name()
 
-    if datatype == "void":
-        ti.create_simple_type(ida_typeinf.BT_VOID)
-        return ti
+        if len(old_parser) < 1:
+            old_parser = "legacy"
 
-    # if it's an indigenous type, try to import/get
-    if datatype in datatypes:
-        if ti.get_named_type(datatype):
+        ida_srclang.select_parser_by_name("clang")
+
+    try:
+        ti = ida_typeinf.tinfo_t()
+
+        if datatype == "void":
+            ti.create_simple_type(ida_typeinf.BT_VOID)
+            return ti
+
+        # if it's an indigenous type, try to import/get
+        if datatype in datatypes:
+            if ti.get_named_type(datatype):
+                return ti
+            else:
+                import_datatype(datatype)
+
+        # can we parse correctly?
+        if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
+            return ti
+
+        # import whatever we can find in the decl string
+        m: regex.Match = re_delims.search(datatype)
+        while m is not None:
+            word = datatype[m.start() : m.end()]
+            if word in datatypes:
+                import_datatype(word)
+            m = re_delims.search(datatype, pos=m.end())
+
+        # can we now?
+        if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
+            return ti
+
+        # fall back to an unspecific type
+        if size is not None:
+            ti.parse(get_arbitrary_size_type(size))
             return ti
         else:
-            import_datatype(datatype)
-
-    # can we parse correctly?
-    if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
-        return ti
-
-    # import whatever we can find in the decl string
-    m: regex.Match = re_delims.search(datatype)
-    while m is not None:
-        word = datatype[m.start() : m.end()]
-        if word in datatypes:
-            import_datatype(word)
-        m = re_delims.search(datatype, pos=m.end())
-
-    # can we now?
-    if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
-        return ti
-
-    # fall back to an unspecific type
-    if size is not None:
-        ti.parse(get_arbitrary_size_type(size))
-        return ti
-    else:
-        return None
+            return None
+    except Exception as e:
+        print(f"Failed to parse datatype '{datatype}': '{e}'")
+    finally:
+        if old_parser is not None:
+            ida_srclang.select_parser_by_name(old_parser)
 
 
 def add_member(parent_td: "ida_typeinf.udt_type_data_t", member: dict) -> bool:
