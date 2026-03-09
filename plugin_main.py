@@ -14,6 +14,7 @@ class DBImporter(ida_idaapi.plugmod_t):
         i_settings = ida_dbimporter.ImportSettings()
 
         i_settings.base_ea_override = form_main.base_ea.value
+        i_settings.parser = form_main.parser[form_main.parser.value]
 
         i_settings.import_fns = form_main.import_fns.checked
         i_settings.import_cmts = form_main.import_cmts.checked
@@ -24,12 +25,12 @@ class DBImporter(ida_idaapi.plugmod_t):
 
         i_settings.overwrite = form_main.overwrite_data.checked
 
-        db_type = db_filepath.split(".")[-1]
+        db_type = ida_dbimporter.detect_db_format(db_filepath)
 
         dbi_data = {}
 
         match db_type:
-            case "xml":
+            case "ghidra_xml":
                 if not form_ghidra.Execute():
                     return
 
@@ -49,7 +50,7 @@ class DBImporter(ida_idaapi.plugmod_t):
                 dbi_data = ida_dbimporter.ghidra.parse_file(
                     db_filepath, conversion_settings=gxml_settings
                 )
-            case "json":
+            case "dbi_json":
                 dbi_data = ida_dbimporter.parse_file(db_filepath)
             case _:
                 return
@@ -72,10 +73,19 @@ def PLUGIN_ENTRY():
     return DBImporterPlug()
 
 
+def export_handler(_):
+    if not form_export.Execute():
+        return
+
+    ida_dbimporter.exporter.export_to_file(form_export.db_filepath.value)
+    ida_kernwin.info(f"Exported info to {form_export.db_filepath.value}")
+
+
 form_main = ida_kernwin.Form(
     r"""DBImporter
     <Database file: {db_filepath}>
     <Base import address: {base_ea}>
+    <Type parser: {parser}>
 
     <Import functions: {import_fns}>
     <Import comments: {import_cmts}>
@@ -85,7 +95,9 @@ form_main = ida_kernwin.Form(
     <Import segments: {import_segs}>
     <Import typed data: {import_typed_data}>
 
-    <Overwrite user-defined information: {overwrite_data}>{toggles}>""",
+    <Overwrite user-defined information: {overwrite_data}>{toggles}>
+
+    <Export IDA database to DBI file: {export}>""",
     {
         "db_filepath": ida_kernwin.Form.FileInput(value="*.json;*.xml", open=True),
         "base_ea": ida_kernwin.Form.NumericInput(),
@@ -101,8 +113,26 @@ form_main = ida_kernwin.Form(
                 "overwrite_data",
             )
         ),
+        "export": ida_kernwin.Form.ButtonInput(export_handler),
+        "parser": ida_kernwin.Form.DropdownListControl(
+            items=["legacy", "clang_templates_only", "clang_always"]
+        ),
     },
 )
+
+form_main.Compile()
+
+form_main.base_ea.value = ida_dbimporter.core.get_base_import_ea()
+
+form_main.import_fns.checked = True
+form_main.import_cmts.checked = True
+form_main.import_types.checked = True
+form_main.import_names.checked = True
+form_main.import_marks.checked = True
+form_main.import_segs.checked = True
+form_main.import_typed_data.checked = True
+form_main.overwrite_data.checked = True
+
 
 form_ghidra = ida_kernwin.Form(
     r"""Ghidra XML import options
@@ -123,21 +153,54 @@ form_ghidra = ida_kernwin.Form(
     },
 )
 
-form_main.Compile()
-
-form_main.base_ea.value = ida_dbimporter.core.get_base_import_ea()
-
-form_main.import_fns.checked = True
-form_main.import_cmts.checked = True
-form_main.import_types.checked = True
-form_main.import_names.checked = True
-form_main.import_marks.checked = True
-form_main.import_segs.checked = True
-form_main.import_typed_data.checked = True
-form_main.overwrite_data.checked = True
-
-
 form_ghidra.Compile()
 
 form_ghidra.only_user_defined_syms.checked = True
 form_ghidra.use_ghidra_callconvs.checked = False
+
+
+form_export = ida_kernwin.Form(
+    # <Base export address: {base_ea}>
+    r"""DBImporter Export
+    <Output file: {db_filepath}>
+
+    <Export functions: {export_fns}>
+    <Export comments: {export_cmts}>
+    <Export types: {export_types}>
+    <Export names: {export_names}>
+    <Export bookmarks: {export_marks}>
+    <Export segments: {export_segs}>
+    <Export typed data: {export_typed_data}>
+
+
+    <Don't filter templated typenames (requires clang parser to parse, experimental):"""
+    """{no_filter_templates}>{toggles}>""",
+    {
+        "db_filepath": ida_kernwin.Form.FileInput(value="*.json", save=True),
+        # "base_ea": ida_kernwin.Form.NumericInput(),
+        "toggles": ida_kernwin.Form.ChkGroupControl(
+            (
+                "export_fns",
+                "export_cmts",
+                "export_types",
+                "export_names",
+                "export_marks",
+                "export_segs",
+                "export_typed_data",
+                "no_filter_templates",
+            )
+        ),
+    },
+)
+
+form_export.Compile()
+
+form_export.export_fns.checked = True
+form_export.export_cmts.checked = True
+form_export.export_types.checked = True
+form_export.export_names.checked = True
+form_export.export_marks.checked = True
+form_export.export_segs.checked = True
+form_export.export_typed_data.checked = True
+
+form_export.no_filter_templates.checked = False

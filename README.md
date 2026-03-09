@@ -6,11 +6,11 @@
 A plugin for importing various reverse engineering database formats into IDA
 
 This project aims to create a format rich in information that can be used to import data from other reverse-engineering tools into IDA, or vice-versa
-At the moment the tool only supports Ghidra XML conversion, but it also has its own IR format (read on further) which makes it easy to create custom format conversion tools (all you need to do is generate some JSON!)
+At the moment the tool supports converting Ghidra XML and exporting data from IDA into its own IR format (read on further) which makes it easy to create custom format conversion tools (all you need to do is generate some JSON!)
 
 ![Image depicting data from Ghidra being imported into IDA](showcase.png)
 
-## Installation
+## Installation as plugin
 
 ### Using HCLI
 
@@ -33,12 +33,28 @@ to the IDA plugins directory: `~/.idapro/plugins/` on \*nix systems or `%APPDATA
 ### How to use the plugin in IDA
 
 Open a binary in IDA, navigate to, and run the plugin (Edit -> Plugins -> DBImporter). It will prompt you for a database file exported from another RE tool. Once selected, the plugin will begin converting the data from the export into its own native format (if it isn't in the native format already), and then importing the converted data into your IDA database itself.
+You can also export your current database in the native DBI format by clicking the "Export IDA database to DBI file" button.
 
-### Use as CLI tool
+## Installation as python package
 
-run `python main.py IN_FILEPATH [-o OUT_FILEPATH]`
-this will convert the `IN_FILEPATH` file to a new format and save it to `OUT_FILEPATH` file
-This can be used i.e. to batch convert files in a shell script
+Clone this repo:
+```bash
+git clone https://github.com/HexRaysSA/ida-dbimporter
+```
+and install it with pip (you may want to use a Virtual ENVironment)
+```bash
+pip install ida-dbimporter
+```
+
+### Use as python CLI tool
+
+run `ida-dbimporter --help` to get a list of options, you may like:
+```bash
+# [c]ombine 2 databases ([i]input files) into one, [t]ranslate to DBI json
+ida-dbimporter -c -i ~/sample.exe_old.json ~/sample.exe_new.xml -t
+# set the [idb] [b]ase (executable or idb), [m]a[k]e an [idb] file, load data from an [i]nput file, and [e]xport the data to export.json
+ida-dbimporter -idbb ~/sample.exe -mkidb -i /tmp/data.xml -e /tmp/export.json
+```
 
 ### Use as python module
 
@@ -51,7 +67,7 @@ with ida_domain.Database.open(path="/path/to/sample") as db:
     ida_dbimporter.import_file_into_ida("/path/to/json")
 ```
 
-For a more detailed usage guide see [usage.md](usage.md)
+For a more detailed usage guide see [USAGE.md](USAGE.md)
 
 ## The IDA DBImporter json schema
 
@@ -158,18 +174,24 @@ An entry in the `datatypes` table can take on multiple forms depending on its ty
 
 "ENUM NAME": {
     "type": "enum",
+    // either programmatically:
     "size": "SIZE",
     "entries": {
         "ENUM ENTRY NAME": "ENUM ENTRY VALUE"
     }
-
+    // or, via text:
+    "decl": "ENUM DECLARATION HERE"
 }
 ```
 
 Since the format is in its infancy, we strongly encourage you to leave feedback, especially about any issues that you encounter. Ease of use and accessibility are our priority.
 
 ## Dependencies
-No dependencies required, the project is entirely self-contained! To use it in headless IDA scripts, you will need [IDA Domain](https://ida-domain.docs.hex-rays.com), though.
+This project uses the `regex` library for better regex support.
+
+When installed through `pip` or `hcli`, the dependencies will be installed automatically with no user action required.
+
+To use it in headless IDA scripts, you will need [IDA Domain](https://ida-domain.docs.hex-rays.com), too.
 
 ## Contributing
 

@@ -1,12 +1,13 @@
 import json
 import math
 import re
+import regex
 
 
 def import_ida_mods() -> None:
     global ida_moves, ida_idc, ida_idaapi, ida_ida, ida_typeinf, ida_name
     global ida_lines, ida_segment, ida_bytes, ida_funcs, ida_frame, ida_nalt
-    global ida_hexrays, ida_kernwin
+    global ida_hexrays, ida_kernwin, ida_srclang
     import ida_moves
     import ida_idc
     import ida_idaapi
@@ -21,6 +22,7 @@ def import_ida_mods() -> None:
     import ida_nalt
     import ida_hexrays
     import ida_kernwin
+    import ida_srclang
 
 
 base_dict = {
@@ -37,8 +39,11 @@ base_dict = {
 datatypes = {}
 ida_base_ea = 0
 
-re_fndecl = re.compile("([a-zA-Z0-9_:]+)(?:[* ]*)(?:[a-zA-Z0-9_:]+)?")
-re_delims = re.compile(r"[\s,*&()<>\[\]{},]")
+re_delims = regex.compile(
+    # template aware regex
+    r"[^\s,*&()<>\[\]{},;]+(<[^<>]*(?1)?[^<>]*>?)*>?[^\s,*&()<>\[\]{},;]*"
+)
+
 re_bitfield = re.compile(r"(^.*):(\d*)$")
 
 import_stack: list[str] = []
@@ -56,6 +61,10 @@ class ImportSettings:
     import_typed_data = True
 
     overwrite = True
+    parser = None
+
+
+import_settings = ImportSettings()
 
 
 def dict_to_json(data: dict) -> str:
@@ -67,13 +76,58 @@ def parse_file(filepath: str):
         return json.load(f)
 
 
+from . import ghidra
+
+fmt_parse_tbl = {
+    "ghidra_xml": (ghidra.parse_file, ghidra.parse_xml),
+    "dbi_json": (parse_file, json.loads),
+}
+
+
+def detect_db_format(filepath: str):
+    if filepath.endswith(".xml"):
+        return "ghidra_xml"
+    elif filepath.endswith(".json"):
+        return "dbi_json"
+
+    # if file has no extension we should identifity the format
+    # unfortunately full schema validation is slow, so we
+    # will probably have to think of something else
+
+    return None
+
+
+def parse_file_auto(filepath: str) -> dict:
+    fmt = detect_db_format(filepath)
+    if fmt is None:
+        return None
+    parse_fn = fmt_parse_tbl[fmt][0]
+    return parse_fn(filepath)
+
+
+def import_file_into_ida_auto(filepath: str, **kwargs):
+    dbi_data = parse_file_auto(filepath)
+    import_data_into_ida(dbi_data, **kwargs)
+
+
 def import_file_into_ida(filepath: str, **kwargs):
     dbi_data = parse_file(filepath)
     import_data_into_ida(dbi_data, **kwargs)
 
 
-def import_data_into_ida(data: dict, import_settings=ImportSettings()):
+def import_data_into_ida(data: dict, settings=ImportSettings()):
     import_ida_mods()
+
+    global import_settings
+    import_settings = settings
+
+    old_parser = ida_srclang.get_selected_parser_name()
+
+    if len(old_parser) < 1:
+        old_parser = "legacy"
+
+    if import_settings.parser == "clang_always":
+        ida_srclang.select_parser_by_name("clang")
 
     global ida_base_ea
     ida_base_ea = (
@@ -82,7 +136,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
         else import_settings.base_ea_override
     )
 
-    if import_settings.import_types:
+    if import_settings.import_types and "datatypes" in data:
         global datatypes
         datatypes = data["datatypes"]
         for name, info in datatypes.items():
@@ -94,7 +148,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog(f"Failed to import type {name}: {e}")
                 continue
 
-    if import_settings.import_names:
+    if import_settings.import_names and "names" in data:
         for addr, name in data["names"].items():
             try:
                 ea = int(addr, 0x10) + ida_base_ea
@@ -107,7 +161,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import name %s@%s: %s" % (name, addr, e))
                 continue
 
-    if import_settings.import_marks:
+    if import_settings.import_marks and "bookmarks" in data:
         for address, description in data["bookmarks"].items():
             try:
                 address = int(address, 0x10) + ida_base_ea
@@ -116,7 +170,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import bookmark @%X: %s" % (address, e))
                 continue
 
-    if import_settings.import_cmts:
+    if import_settings.import_cmts and "comments" in data:
         for address, comment in data["comments"].items():
             try:
                 address = int(address, 0x10) + ida_base_ea
@@ -132,7 +186,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import comment @%X: %s" % (address, e))
                 continue
 
-    if import_settings.import_fns:
+    if import_settings.import_fns and "functions" in data:
         for fn_ea, fn_info in data["functions"].items():
             try:
                 fn_ea_int = int(fn_ea, 0x10) + ida_base_ea
@@ -141,7 +195,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog(f"Failed to import function '{fn_ea}': {e}")
                 continue
 
-    if import_settings.import_segs:
+    if import_settings.import_segs and "segments" in data:
         for segment in data["segments"]:
             try:
                 import_segment(segment)
@@ -149,7 +203,7 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
                 wlog("Failed to import segment %s: %s" % (segment["name"], e))
                 continue
 
-    if import_settings.import_typed_data:
+    if import_settings.import_typed_data and "typed_data" in data:
         for ea, type in data["typed_data"].items():
             try:
                 ea_int = int(ea, 0x10) + ida_base_ea
@@ -163,6 +217,8 @@ def import_data_into_ida(data: dict, import_settings=ImportSettings()):
             except Exception as e:
                 wlog("Failed to set datatype %s@%s: %s" % (type, ea, e))
             continue
+
+    ida_srclang.select_parser_by_name(old_parser)
 
 
 def wlog(msg: str) -> None:
@@ -182,7 +238,8 @@ def import_function(fn_ea: int, info: dict) -> None:
     fn_ti = ida_typeinf.tinfo_t()
 
     if "decl" in info:
-        if fn_ti.parse(info["decl"], pt_flags=ida_typeinf.PT_SIL) is True:
+        fn_ti = datatype_to_tinfo(info["decl"])
+        if fn_ti is not None:
             ida_typeinf.apply_tinfo(
                 fn_ea,
                 fn_ti,
@@ -318,19 +375,26 @@ def import_datatype(name: str) -> bool:
             if enum_ti is not None:
                 return True
 
-            # IDA enum size = 1 << (n - 1)
-            enum_size = int(info["size"], 0x10)
-            enum_size_exp = int(math.log2(enum_size)) + 1
-            if ti.create_enum(enum_size_exp | ida_typeinf.BTE_HEX) is not True:
-                ida_kernwin.warning(f"Bad enum size: {name}, {enum_size}")
-                return False
+            if "decl" in info:
+                ti = datatype_to_tinfo(info["decl"])
+                if ti is None:
+                    return False
+            else:
+                # IDA enum size = 1 << (n - 1)
+                enum_size = int(info["size"], 0x10)
+                enum_size_exp = int(math.log2(enum_size)) + 1
+                if ti.create_enum(enum_size_exp | ida_typeinf.BTE_HEX) is not True:
+                    ida_kernwin.warning(f"Bad enum size: {name}, {enum_size}")
+                    return False
 
-            for entry_name, entry_value in info["entries"].items():
-                e_val_int = int(entry_value, 0x10)
-                check_terr(
-                    ti.add_edm(entry_name, e_val_int, -1, ida_typeinf.ETF_FORCENAME),
-                    f"Adding enum value {entry_name}",
-                )
+                for entry_name, entry_value in info["entries"].items():
+                    e_val_int = int(entry_value, 0x10)
+                    check_terr(
+                        ti.add_edm(
+                            entry_name, e_val_int, -1, ida_typeinf.ETF_FORCENAME
+                        ),
+                        f"Adding enum value {entry_name}",
+                    )
 
             return check_terr(
                 ti.set_named_type(None, name, ida_typeinf.NTF_REPLACE),
@@ -339,7 +403,7 @@ def import_datatype(name: str) -> bool:
 
         case "function":
             if "decl" in info:
-                ti = get_fn_tinfo_parse(info["decl"])
+                ti = datatype_to_tinfo(info["decl"])
             else:
                 ti = get_fn_tinfo_programmatic(info)
 
@@ -359,38 +423,58 @@ def check_terr(code: int, action: str) -> bool:
 
 
 def datatype_to_tinfo(datatype: str, size: int | None = None):
-    ti = ida_typeinf.tinfo_t()
+    old_parser = None
+    if import_settings.parser == "clang_templates_only" and (
+        "<" in datatype or ">" in datatype
+    ):
+        old_parser = ida_srclang.get_selected_parser_name()
 
-    if datatype == "void":
-        ti.create_simple_type(ida_typeinf.BT_VOID)
-        return ti
+        if len(old_parser) < 1:
+            old_parser = "legacy"
 
-    # if it's an indigenous type, try to import/get
-    if datatype in datatypes:
-        if ti.get_named_type(datatype):
+        ida_srclang.select_parser_by_name("clang")
+
+    try:
+        ti = ida_typeinf.tinfo_t()
+
+        if datatype == "void":
+            ti.create_simple_type(ida_typeinf.BT_VOID)
+            return ti
+
+        # if it's an indigenous type, try to import/get
+        if datatype in datatypes:
+            if ti.get_named_type(datatype):
+                return ti
+            else:
+                import_datatype(datatype)
+
+        # can we parse correctly?
+        if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
+            return ti
+
+        # import whatever we can find in the decl string
+        m: regex.Match = re_delims.search(datatype)
+        while m is not None:
+            word = datatype[m.start() : m.end()]
+            if word in datatypes:
+                import_datatype(word)
+            m = re_delims.search(datatype, pos=m.end())
+
+        # can we now?
+        if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
+            return ti
+
+        # fall back to an unspecific type
+        if size is not None:
+            ti.parse(get_arbitrary_size_type(size))
             return ti
         else:
-            import_datatype(datatype)
-
-    # can we parse correctly?
-    if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
-        return ti
-
-    # import whatever we can find in the decl string
-    for word in re_delims.split(datatype):
-        if word in datatypes:
-            import_datatype(word)
-
-    # can we now?
-    if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):
-        return ti
-
-    # fall back to an unspecific type
-    if size is not None:
-        ti.parse(get_arbitrary_size_type(size))
-        return ti
-    else:
-        return None
+            return None
+    except Exception as e:
+        print(f"Failed to parse datatype '{datatype}': '{e}'")
+    finally:
+        if old_parser is not None:
+            ida_srclang.select_parser_by_name(old_parser)
 
 
 def add_member(parent_td: "ida_typeinf.udt_type_data_t", member: dict) -> bool:
@@ -426,10 +510,7 @@ def get_struct_or_union_ti(info: dict, union=False) -> "ida_typeinf.tinfo_t":
     ti = ida_typeinf.tinfo_t()
 
     if "decl" in info:
-        if not ti.parse(info["decl"], pt_flags=ida_typeinf.PT_SIL):
-            return None
-
-        return ti
+        return datatype_to_tinfo(info["decl"])
 
     udt_td = ida_typeinf.udt_type_data_t()
     udt_td.is_union = union
@@ -441,23 +522,6 @@ def get_struct_or_union_ti(info: dict, union=False) -> "ida_typeinf.tinfo_t":
         return None
 
     return ti
-
-
-def get_fn_tinfo_parse(fn_decl: str) -> "ida_typeinf.tinfo_t":
-    fn_ti = ida_typeinf.tinfo_t()
-    # purpose: extract all types from a function declaration
-    # so we can recursively import them all from the string
-    fn_types = re_fndecl.findall(fn_decl)
-
-    for ftype in fn_types:
-        if fn_ti.parse(ftype, pt_flags=ida_typeinf.PT_SIL) is False:
-            if ftype in datatypes:
-                import_datatype(ftype)
-
-    if fn_ti.parse(fn_decl, pt_flags=ida_typeinf.PT_SIL) is False:
-        raise Exception(f"Failed to parse function '{fn_decl}'")
-
-    return fn_ti
 
 
 def get_fn_tinfo_programmatic(fn_data: dict) -> "ida_typeinf.tinfo_t":

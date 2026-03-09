@@ -11,6 +11,7 @@ readme = "readme.md"
 dynamic = ["version"]
 license = "MIT"
 requires-python = ">=3.9"
+dependencies = ["regex"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -37,3 +38,6 @@ Issues = "https://github.com/HexRaysSA/ida-dbimporter/issues"
 
 [tool.setuptools]
 packages = ["ida_dbimporter"]
+
+[project.scripts]
+ida-dbimporter = "ida_dbimporter.cli:main"
