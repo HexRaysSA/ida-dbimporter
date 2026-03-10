@@ -235,8 +235,6 @@ def get_arbitrary_size_type(size: int) -> str:
 
 
 def import_function(fn_ea: int, info: dict) -> None:
-    fn_ti = ida_typeinf.tinfo_t()
-
     if "decl" in info:
         fn_ti = datatype_to_tinfo(info["decl"])
         if fn_ti is not None:
