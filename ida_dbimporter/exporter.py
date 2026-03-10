@@ -34,7 +34,10 @@ def export_to_file(filepath: str, **kwargs) -> None:
         f.write(ida_dbimporter.core.dict_to_json(dbi_export))
 
 
-def export(settings=ExportSettings()) -> dict:
+def export(settings=None) -> dict:
+    if settings is None:
+        settings = ExportSettings()
+
     global export_settings
     export_settings = settings
     global ida_moves, idc, ida_idaapi, ida_ida, ida_typeinf, ida_name

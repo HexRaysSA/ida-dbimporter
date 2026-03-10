@@ -115,7 +115,10 @@ def import_file_into_ida(filepath: str, **kwargs):
     import_data_into_ida(dbi_data, **kwargs)
 
 
-def import_data_into_ida(data: dict, settings=ImportSettings()):
+def import_data_into_ida(data: dict, settings=None):
+    if settings is None:
+        settings = ImportSettings()
+
     import_ida_mods()
 
     global import_settings
