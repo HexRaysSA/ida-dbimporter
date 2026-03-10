@@ -97,7 +97,7 @@ def detect_db_format(filepath: str):
     return None
 
 
-def parse_file_auto(filepath: str) -> dict:
+def parse_file_auto(filepath: str) -> dict | None:
     fmt = detect_db_format(filepath)
     if fmt is None:
         return None
