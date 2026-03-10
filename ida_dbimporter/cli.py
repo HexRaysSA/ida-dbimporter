@@ -115,8 +115,6 @@ def main():
     with open(args.input[0] + ".combined.json", "w") as f:
         f.write(json_str)
 
-    return
-
 
 if __name__ == "__main__":
     main()
