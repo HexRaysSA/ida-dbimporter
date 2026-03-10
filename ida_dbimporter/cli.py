@@ -34,12 +34,22 @@ def main():
     parser.add_argument(
         "-i", "--input", nargs="*", help="Input file path, can be multiple files"
     )
-    parser.add_argument(
+
+    input_mode = parser.add_mutually_exclusive_group()
+    input_mode.add_argument(
         "-c",
         "--combine",
         action="store_true",
         help="Combine input files",
     )
+    input_mode.add_argument(
+        "-t",
+        "--translate",
+        action="store_true",
+        help="Translate input files into DBI json. Files will be saved either to "
+        "{input_filepath}.json, or {first_input_filepath}.combined.json, when combined",
+    )
+
     parser.add_argument(
         "-mkidb",
         "--make-idb",
@@ -57,31 +67,24 @@ def main():
         "--export",
         help="Export IDB/binary to DBI JSON format database (idb-base, make-idb)",
     )
-    parser.add_argument(
-        "-t",
-        "--translate",
-        action="store_true",
-        help="Translate input files into DBI json. Files will be saved either to "
-        "{input_filepath}.json, or {first_input_filepath}.combined.json, when combined",
-    )
 
     args = parser.parse_args(sys.argv[1:])
 
     dbi_data = {}
 
-    if args.combine or args.translate:
-        for i in args.input:
-            if args.combine:
-                dbi_data = deep_merge(dbi_data, ida_dbimporter.parse_file_auto(i))
-            elif args.translate:
-                if ida_dbimporter.detect_db_format(i) == "dbi_json":
-                    continue
+    if args.input is not None:
+        if args.combine or args.translate:
+            for i in args.input:
+                if args.combine:
+                    dbi_data = deep_merge(dbi_data, ida_dbimporter.parse_file_auto(i))
+                elif args.translate:
+                    if ida_dbimporter.detect_db_format(i) == "dbi_json":
+                        continue
 
-                dbi_data = ida_dbimporter.parse_file_auto(i)
-                with open(f"{i}.json", "w") as f:
-                    f.write(ida_dbimporter.dict_to_json(dbi_data))
-    else:
-        if args.input is not None:
+                    dbi_data = ida_dbimporter.parse_file_auto(i)
+                    with open(f"{i}.json", "w") as f:
+                        f.write(ida_dbimporter.dict_to_json(dbi_data))
+        else:
             i = args.input[len(args.input) - 1]
             dbi_data = ida_dbimporter.parse_file_auto(i)
 
