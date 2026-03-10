@@ -90,7 +90,7 @@ def main():
 
         db = ida_domain.Database()
 
-        if db.open(args.idb_base, save_on_close=args.make_idb is not None) is None:
+        if db.open(args.idb_base, save_on_close=args.make_idb) is None:
             sys.exit(2)
 
         if len(dbi_data) > 0:
