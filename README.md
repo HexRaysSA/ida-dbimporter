@@ -72,10 +72,10 @@ For a more detailed usage guide see [USAGE.md](USAGE.md)
 ## The IDA DBImporter json schema
 
 This project serves to develop a format for sharing data between reverse engineering tools that is powerful, easy to parse/generate and extensible
-In its 0.1 version the format is structured as such:
+In its 0.2 version the format is structured as such:
 ```json
 {
-    "version": "0.1",
+    "version": "0.2",
     "datatypes": {
         "NAME OF DATATYPE": {
             "type": "struct|union|typedef|enum|function"
@@ -91,10 +91,10 @@ In its 0.1 version the format is structured as such:
         "BOOKMARK EA": "DESCRIPTION"
         ...
     },
-    "comments": {
-        "COMMENT EA": { "contents": "COMMENT CONTENTS", "type":  "pre|post|eol|repeatable" }
+    "comments": [
+        { "address": "COMMENT EA", "contents": "COMMENT CONTENTS", "type":  "pre|post|eol|repeatable" }
         ...
-    },
+    ],
     "functions":  {
         "FUNCTION EA": {
             // optional

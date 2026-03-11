@@ -74,6 +74,7 @@ def main():
 
     dbi_data = {}
 
+    # first aggregate the data, if any
     if list_arg_nonempty(args.input):
         if args.combine or args.translate:
             for i in args.input:
@@ -90,6 +91,8 @@ def main():
             i = args.input[len(args.input) - 1]
             dbi_data = ida_dbimporter.parse_file_auto(i)
 
+    # when performing certain function we want to open up a database
+    # and import stuff into it
     if args.make_idb or args.export:
         import ida_domain
 
@@ -109,11 +112,13 @@ def main():
 
         db.close()
 
+    # if we are not combining files, our job is done
     if not args.combine:
         return
 
     json_str = ida_dbimporter.dict_to_json(dbi_data)
 
+    # if we are combining files, output one last file that combines all inputs
     if list_arg_nonempty(args.input):
         with open(args.input[0] + ".combined.json", "w") as f:
             f.write(json_str)

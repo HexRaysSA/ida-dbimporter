@@ -235,7 +235,9 @@ def parse_xml(
             case "end-of-line":
                 type = "eol"
 
-        result["comments"][hex(addr)] = {"contents": contents, "type": type}
+        result["comments"].append(
+            {"address": hex(addr), "contents": contents, "type": type}
+        )
 
     memmap = program.getElementsByTagName("MEMORY_MAP")[0]
     for msection in memmap.getElementsByTagName("MEMORY_SECTION"):
