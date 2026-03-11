@@ -290,6 +290,10 @@ def import_comment(address: int, comment: dict) -> None:
             ida_bytes.set_cmt(address, comment["contents"], True)
         case "eol":
             ida_bytes.set_cmt(address, comment["contents"], False)
+        case "func":
+            ida_funcs.set_func_cmt(ida_funcs.get_func(address), comment["contents"], False)
+        case "func_repeatable":
+            ida_funcs.set_func_cmt(ida_funcs.get_func(address), comment["contents"], True)
 
 
 def import_segment(segment: dict) -> None:

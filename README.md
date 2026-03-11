@@ -92,7 +92,7 @@ In its 0.2 version the format is structured as such:
         ...
     },
     "comments": [
-        { "address": "COMMENT EA", "contents": "COMMENT CONTENTS", "type":  "pre|post|eol|repeatable" }
+        { "address": "COMMENT EA", "contents": "COMMENT CONTENTS", "type":  "pre|post|eol|repeatable|func|func_repeatable" }
         ...
     ],
     "functions":  {

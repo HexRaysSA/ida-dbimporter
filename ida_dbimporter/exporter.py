@@ -81,9 +81,11 @@ def export(settings=None) -> dict:
 
             ea = fn.start_ea - base_ea
 
-            fn_entry = export_function(fn)
+            fn_entry, cmts = export_function(fn)
             if len(fn_entry) >= 1:
                 result["functions"][hex(ea)] = fn_entry
+            
+            result["comments"] += cmts
 
     if settings.export_segs:
         for n in range(0, ida_segment.get_segm_qty()):
@@ -161,6 +163,7 @@ def scan_idb_props(result: dict) -> dict:
 
 
 def export_cmts(ea: int) -> list[dict]:
+    # function comments are extracted with the functions, see export_function
     results = []
     addr = hex(ea - base_ea)
 
@@ -232,7 +235,30 @@ def export_type(ti: "ida_typeinf.tinfo_t") -> dict:
     return {"type": type_of_type, "decl": decl}
 
 
-def export_function(fn: "ida_funcs.func_t") -> dict:
+def export_function(fn: "ida_funcs.func_t") -> (dict, list[dict]):
+    cmts = []
+
+    cmt = ida_funcs.get_func_cmt(fn, False)
+    if cmt is not None:
+        cmts.append(
+            {
+                "address": hex(fn.start_ea - base_ea),
+                "contents": cmt,
+                "type": "func",
+            }
+        )
+
+    cmt = ida_funcs.get_func_cmt(fn, True)
+    if cmt is not None:
+        cmts.append(
+            {
+                "address": hex(fn.start_ea - base_ea),
+                "contents": cmt,
+                "type": "func_repeatable",
+            }
+        )
+
+
     fn_entry = {"lvars": []}
 
     if fn.get_prototype() is not None:
@@ -267,4 +293,4 @@ def export_function(fn: "ida_funcs.func_t") -> dict:
 
             fn_entry["lvars"].append(lvar)
 
-    return fn_entry
+    return fn_entry, cmts
