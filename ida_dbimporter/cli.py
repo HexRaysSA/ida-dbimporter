@@ -10,6 +10,10 @@ def deep_merge(d1, d2):
     return d1
 
 
+def list_arg_nonempty(arg: list | None) -> bool:
+    return arg is not None and len(arg) > 0
+
+
 def main():
     import argparse
     import sys
@@ -34,15 +38,13 @@ def main():
     parser.add_argument(
         "-i", "--input", nargs="*", help="Input file path, can be multiple files"
     )
-
-    input_mode = parser.add_mutually_exclusive_group()
-    input_mode.add_argument(
+    parser.add_argument(
         "-c",
         "--combine",
         action="store_true",
         help="Combine input files",
     )
-    input_mode.add_argument(
+    parser.add_argument(
         "-t",
         "--translate",
         action="store_true",
@@ -72,7 +74,7 @@ def main():
 
     dbi_data = {}
 
-    if args.input is not None:
+    if list_arg_nonempty(args.input):
         if args.combine or args.translate:
             for i in args.input:
                 if args.combine:
@@ -88,7 +90,7 @@ def main():
             i = args.input[len(args.input) - 1]
             dbi_data = ida_dbimporter.parse_file_auto(i)
 
-    if args.make_idb or args.export is not None:
+    if args.make_idb or args.export:
         import ida_domain
 
         db = ida_domain.Database()
@@ -112,8 +114,9 @@ def main():
 
     json_str = ida_dbimporter.dict_to_json(dbi_data)
 
-    with open(args.input[0] + ".combined.json", "w") as f:
-        f.write(json_str)
+    if list_arg_nonempty(args.input):
+        with open(args.input[0] + ".combined.json", "w") as f:
+            f.write(json_str)
 
 
 if __name__ == "__main__":
