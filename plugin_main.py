@@ -85,6 +85,7 @@ def export_handler(_):
     e_settings.export_names = form_export.export_names.checked
     e_settings.export_marks = form_export.export_marks.checked
     e_settings.export_segs = form_export.export_segs.checked
+    e_settings.export_typed_data = form_export.export_typed_data.checked
 
     e_settings.no_filter_templates = form_export.no_filter_templates.checked
 
