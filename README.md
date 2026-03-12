@@ -37,14 +37,18 @@ You can also export your current database in the native DBI format by clicking t
 
 ## Installation as python package
 
-Clone this repo:
-```bash
-git clone https://github.com/HexRaysSA/ida-dbimporter
-```
-and install it with pip (you may want to use a Virtual ENVironment)
+You can find the package on [`pypi`](https://pypi.org/project/ida-dbimporter/) and install it with `pip`:
 ```bash
 pip install ida-dbimporter
 ```
+You may need/want to use a virtual environment:
+```bash
+python -m venv venv
+source ./venv/bin/activate
+# source ./venv/bin/activate.fish for fish shell users
+pip install ida-dbimporter
+```
+
 
 ### Use as python CLI tool
 
