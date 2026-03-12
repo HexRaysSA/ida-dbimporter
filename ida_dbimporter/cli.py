@@ -91,8 +91,8 @@ def main():
             i = args.input[len(args.input) - 1]
             dbi_data = ida_dbimporter.parse_file_auto(i)
 
-    # when performing certain function we want to open up a database
-    # and import stuff into it
+    # when performing certain functions (i.e. export, anything with idb-base, really)
+    # we want to open up a database and import available data into it
     if args.make_idb or args.export:
         import ida_domain
 
@@ -118,7 +118,7 @@ def main():
 
     json_str = ida_dbimporter.dict_to_json(dbi_data)
 
-    # if we are combining files, output one last file that combines all inputs
+    # if we are combining files, output one file that combines all inputs
     if list_arg_nonempty(args.input):
         with open(args.input[0] + ".combined.json", "w") as f:
             f.write(json_str)
