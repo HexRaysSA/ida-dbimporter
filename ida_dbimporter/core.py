@@ -26,11 +26,11 @@ def import_ida_mods() -> None:
 
 
 base_dict = {
-    "version": "0.1",
+    "version": "0.2",
     "datatypes": {},
     "names": {},
     "bookmarks": {},
-    "comments": {},
+    "comments": [],
     "functions": {},
     "segments": [],
     "typed_data": {},
@@ -39,7 +39,7 @@ base_dict = {
 datatypes = {}
 ida_base_ea = 0
 
-re_delims = regex.compile(
+re_typenames = regex.compile(
     # template aware regex
     r"[^\s,*&()<>\[\]{},;]+(<[^<>]*(?1)?[^<>]*>?)*>?[^\s,*&()<>\[\]{},;]*"
 )
@@ -76,10 +76,11 @@ def parse_file(filepath: str):
         return json.load(f)
 
 
-from . import ghidra
+# we import these only for the format-to-parsing-function-table
+from .ghidra import parse_file as ghidra_parse_file, parse_xml as ghidra_parse_xml
 
 fmt_parse_tbl = {
-    "ghidra_xml": (ghidra.parse_file, ghidra.parse_xml),
+    "ghidra_xml": (ghidra_parse_file, ghidra_parse_xml),
     "dbi_json": (parse_file, json.loads),
 }
 
@@ -97,7 +98,7 @@ def detect_db_format(filepath: str):
     return None
 
 
-def parse_file_auto(filepath: str) -> dict:
+def parse_file_auto(filepath: str) -> dict | None:
     fmt = detect_db_format(filepath)
     if fmt is None:
         return None
@@ -115,7 +116,10 @@ def import_file_into_ida(filepath: str, **kwargs):
     import_data_into_ida(dbi_data, **kwargs)
 
 
-def import_data_into_ida(data: dict, settings=ImportSettings()):
+def import_data_into_ida(data: dict, settings=None):
+    if settings is None:
+        settings = ImportSettings()
+
     import_ida_mods()
 
     global import_settings
@@ -171,9 +175,15 @@ def import_data_into_ida(data: dict, settings=ImportSettings()):
                 continue
 
     if import_settings.import_cmts and "comments" in data:
-        for address, comment in data["comments"].items():
+        for cmt_entry in data["comments"]:
             try:
-                address = int(address, 0x10) + ida_base_ea
+                if data["version"] == "0.1":
+                    cmt = data["comments"][cmt_entry]
+                    address = int(cmt_entry, 0x10) + ida_base_ea
+                # dbi format >=v0.2
+                else:
+                    cmt = cmt_entry
+                    address = int(cmt["address"], 0x10) + ida_base_ea
 
                 if (
                     ida_bytes.get_cmt(address, False) is not None
@@ -181,7 +191,7 @@ def import_data_into_ida(data: dict, settings=ImportSettings()):
                 ):
                     continue
 
-                import_comment(address, comment)
+                import_comment(address, cmt)
             except Exception as e:
                 wlog("Failed to import comment @%X: %s" % (address, e))
                 continue
@@ -235,8 +245,6 @@ def get_arbitrary_size_type(size: int) -> str:
 
 
 def import_function(fn_ea: int, info: dict) -> None:
-    fn_ti = ida_typeinf.tinfo_t()
-
     if "decl" in info:
         fn_ti = datatype_to_tinfo(info["decl"])
         if fn_ti is not None:
@@ -282,6 +290,14 @@ def import_comment(address: int, comment: dict) -> None:
             ida_bytes.set_cmt(address, comment["contents"], True)
         case "eol":
             ida_bytes.set_cmt(address, comment["contents"], False)
+        case "func":
+            ida_funcs.set_func_cmt(
+                ida_funcs.get_func(address), comment["contents"], False
+            )
+        case "func_repeatable":
+            ida_funcs.set_func_cmt(
+                ida_funcs.get_func(address), comment["contents"], True
+            )
 
 
 def import_segment(segment: dict) -> None:
@@ -428,11 +444,12 @@ def datatype_to_tinfo(datatype: str, size: int | None = None):
         "<" in datatype or ">" in datatype
     ):
         old_parser = ida_srclang.get_selected_parser_name()
-
         if len(old_parser) < 1:
             old_parser = "legacy"
 
-        ida_srclang.select_parser_by_name("clang")
+        # reduce parser message spam
+        if old_parser != "clang":
+            ida_srclang.select_parser_by_name("clang")
 
     try:
         ti = ida_typeinf.tinfo_t()
@@ -453,12 +470,12 @@ def datatype_to_tinfo(datatype: str, size: int | None = None):
             return ti
 
         # import whatever we can find in the decl string
-        m: regex.Match = re_delims.search(datatype)
+        m: regex.Match = re_typenames.search(datatype)
         while m is not None:
             word = datatype[m.start() : m.end()]
             if word in datatypes:
                 import_datatype(word)
-            m = re_delims.search(datatype, pos=m.end())
+            m = re_typenames.search(datatype, pos=m.end())
 
         # can we now?
         if ti.parse(datatype, pt_flags=ida_typeinf.PT_SIL):

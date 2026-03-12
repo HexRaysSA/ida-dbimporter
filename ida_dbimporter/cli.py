@@ -10,6 +10,10 @@ def deep_merge(d1, d2):
     return d1
 
 
+def list_arg_nonempty(arg: list | None) -> bool:
+    return arg is not None and len(arg) > 0
+
+
 def main():
     import argparse
     import sys
@@ -41,6 +45,14 @@ def main():
         help="Combine input files",
     )
     parser.add_argument(
+        "-t",
+        "--translate",
+        action="store_true",
+        help="Translate input files into DBI json. Files will be saved either to "
+        "{input_filepath}.json, or {first_input_filepath}.combined.json, when combined",
+    )
+
+    parser.add_argument(
         "-mkidb",
         "--make-idb",
         action="store_true",
@@ -57,40 +69,36 @@ def main():
         "--export",
         help="Export IDB/binary to DBI JSON format database (idb-base, make-idb)",
     )
-    parser.add_argument(
-        "-t",
-        "--translate",
-        action="store_true",
-        help="Translate input files into DBI json. Files will be saved either to "
-        "{input_filepath}.json, or {first_input_filepath}.combined.json, when combined",
-    )
 
     args = parser.parse_args(sys.argv[1:])
 
     dbi_data = {}
 
-    if args.combine or args.translate:
-        for i in args.input:
-            if args.combine:
-                dbi_data = deep_merge(dbi_data, ida_dbimporter.parse_file_auto(i))
-            elif args.translate:
-                if ida_dbimporter.detect_db_format(i) == "dbi_json":
-                    continue
+    # first aggregate the data, if any
+    if list_arg_nonempty(args.input):
+        if args.combine or args.translate:
+            for i in args.input:
+                if args.combine:
+                    dbi_data = deep_merge(dbi_data, ida_dbimporter.parse_file_auto(i))
+                elif args.translate:
+                    if ida_dbimporter.detect_db_format(i) == "dbi_json":
+                        continue
 
-                dbi_data = ida_dbimporter.parse_file_auto(i)
-                with open(f"{i}.json", "w") as f:
-                    f.write(ida_dbimporter.dict_to_json(dbi_data))
-    else:
-        if args.input is not None:
+                    dbi_data = ida_dbimporter.parse_file_auto(i)
+                    with open(f"{i}.json", "w") as f:
+                        f.write(ida_dbimporter.dict_to_json(dbi_data))
+        else:
             i = args.input[len(args.input) - 1]
             dbi_data = ida_dbimporter.parse_file_auto(i)
 
-    if args.make_idb or args.export is not None:
+    # when performing certain functions (i.e. export, anything with idb-base, really)
+    # we want to open up a database and import available data into it
+    if args.make_idb or args.export:
         import ida_domain
 
         db = ida_domain.Database()
 
-        if db.open(args.idb_base, save_on_close=args.make_idb is not None) is None:
+        if db.open(args.idb_base, save_on_close=args.make_idb) is None:
             sys.exit(2)
 
         if len(dbi_data) > 0:
@@ -104,15 +112,16 @@ def main():
 
         db.close()
 
+    # if we are not combining files, our job is done
     if not args.combine:
         return
 
     json_str = ida_dbimporter.dict_to_json(dbi_data)
 
-    with open(args.input[0] + ".combined.json", "w") as f:
-        f.write(json_str)
-
-    return
+    # if we are combining files, output one file that combines all inputs
+    if list_arg_nonempty(args.input):
+        with open(args.input[0] + ".combined.json", "w") as f:
+            f.write(json_str)
 
 
 if __name__ == "__main__":

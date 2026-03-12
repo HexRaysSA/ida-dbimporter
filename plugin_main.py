@@ -77,7 +77,21 @@ def export_handler(_):
     if not form_export.Execute():
         return
 
-    ida_dbimporter.exporter.export_to_file(form_export.db_filepath.value)
+    e_settings = ida_dbimporter.exporter.ExportSettings()
+
+    e_settings.export_fns = form_export.export_fns.checked
+    e_settings.export_cmts = form_export.export_cmts.checked
+    e_settings.export_types = form_export.export_types.checked
+    e_settings.export_names = form_export.export_names.checked
+    e_settings.export_marks = form_export.export_marks.checked
+    e_settings.export_segs = form_export.export_segs.checked
+    e_settings.export_typed_data = form_export.export_typed_data.checked
+
+    e_settings.no_filter_templates = form_export.no_filter_templates.checked
+
+    ida_dbimporter.exporter.export_to_file(
+        form_export.db_filepath.value, settings=e_settings
+    )
     ida_kernwin.info(f"Exported info to {form_export.db_filepath.value}")
 
 

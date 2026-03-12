@@ -17,7 +17,6 @@ class ExportSettings:
     export_segs = True
     export_typed_data = True
 
-    overwrite = True
     no_filter_templates = False
 
 
@@ -34,7 +33,10 @@ def export_to_file(filepath: str, **kwargs) -> None:
         f.write(ida_dbimporter.core.dict_to_json(dbi_export))
 
 
-def export(settings=ExportSettings()) -> dict:
+def export(settings=None) -> dict:
+    if settings is None:
+        settings = ExportSettings()
+
     global export_settings
     export_settings = settings
     global ida_moves, idc, ida_idaapi, ida_ida, ida_typeinf, ida_name
@@ -56,43 +58,91 @@ def export(settings=ExportSettings()) -> dict:
     import ida_kernwin
     import ida_ida
 
-    result = deepcopy(ida_dbimporter.core.base_dict)
     global base_ea
     base_ea = ida_dbimporter.core.get_base_import_ea()
 
+    result = scan_idb_props(deepcopy(ida_dbimporter.core.base_dict))
+
+    if settings.export_marks:
+        for slot in range(ida_moves.MAX_MARK_SLOT):
+            ea = idc.get_bookmark(slot)
+            if ea == ida_idaapi.BADADDR:
+                break
+
+            ea -= base_ea
+            desc = idc.get_bookmark_desc(slot)
+            result["bookmarks"][hex(ea)] = desc
+
+    if settings.export_fns:
+        for idx in range(ida_funcs.get_func_qty()):
+            fn = ida_funcs.getn_func(idx)
+            if fn is None:
+                continue
+
+            ea = fn.start_ea - base_ea
+
+            fn_entry, cmts = export_function(fn)
+            if len(fn_entry) >= 1:
+                result["functions"][hex(ea)] = fn_entry
+
+            result["comments"] += cmts
+
+    if settings.export_segs:
+        for n in range(0, ida_segment.get_segm_qty()):
+            seg = ida_segment.getnseg(n)
+            seg_entry = {
+                "name": idc.get_segm_name(seg.start_ea),
+                "start_ea": hex(seg.start_ea - base_ea),
+                "end_ea": hex(seg.end_ea - base_ea),
+                "perms": "",
+            }
+
+            for perm_ida, perm_dbi in [
+                (ida_segment.SEGPERM_READ, "r"),
+                (ida_segment.SEGPERM_WRITE, "w"),
+                (ida_segment.SEGPERM_EXEC, "x"),
+            ]:
+                if seg.perm & perm_ida:
+                    seg_entry["perms"] += perm_dbi
+
+            result["segments"].append(seg_entry)
+
+    if settings.export_types:
+        idatil = ida_typeinf.get_idati()
+
+        for ti in idatil.numbered_types():
+            type_entry = export_type(ti)
+            if type_entry is not None:
+                name = ti.get_type_name()
+                if not export_settings.no_filter_templates:
+                    name = normalize_templates(name)
+
+                result["datatypes"][name] = type_entry
+
+    return result
+
+
+# scans for comments, names, and data
+def scan_idb_props(result: dict) -> dict:
     ea = ida_ida.inf_get_min_ea()
     max_ea = ida_ida.inf_get_max_ea()
 
     while ea != ida_idaapi.BADADDR:
         f = ida_bytes.get_full_flags(ea)
 
-        if ida_bytes.has_cmt(f) or ida_bytes.has_extra_cmts(f):
-            cmt = ida_lines.get_extra_cmt(ea, ida_lines.E_PREV)
-            if cmt is not None:
-                result["comments"][hex(ea - base_ea)] = {"contents": cmt, "type": "pre"}
-            cmt = ida_lines.get_extra_cmt(ea, ida_lines.E_NEXT)
-            if cmt is not None:
-                result["comments"][hex(ea - base_ea)] = {
-                    "contents": cmt,
-                    "type": "post",
-                }
-            cmt = idc.get_cmt(ea, True)
-            if cmt is not None:
-                result["comments"][hex(ea - base_ea)] = {
-                    "contents": cmt,
-                    "type": "repeatable",
-                }
-            cmt = idc.get_cmt(ea, False)
-            if cmt is not None:
-                result["comments"][hex(ea - base_ea)] = {"contents": cmt, "type": "eol"}
-        if ida_bytes.has_user_name(f):
+        if export_settings.export_cmts and (
+            ida_bytes.has_cmt(f) or ida_bytes.has_extra_cmts(f)
+        ):
+            result["comments"] += export_cmts(ea)
+
+        if export_settings.export_names and ida_bytes.has_user_name(f):
             name = ida_name.get_visible_name(
                 ea, ida_name.GN_LOCAL | ida_name.GN_VISIBLE
             )
             if name is not None and len(name) >= 1:
                 result["names"][hex(ea - base_ea)] = name
 
-        if ida_bytes.is_struct(f):
+        if export_settings.export_typed_data and ida_bytes.is_struct(f):
             opndbuf = ida_nalt.opinfo_t()
             opnd = ida_bytes.get_opinfo(opndbuf, ea, 0, f)
             typename = idc.get_struc_name(opnd.tid)
@@ -102,63 +152,50 @@ def export(settings=ExportSettings()) -> dict:
         ea = ida_bytes.next_that(
             ea,
             max_ea,
-            lambda x: ida_bytes.has_cmt(x)
-            or ida_bytes.has_extra_cmts(x)
-            or ida_bytes.has_user_name(x)
-            or ida_bytes.is_struct(x),
+            lambda x: (
+                export_settings.export_cmts
+                and (ida_bytes.has_cmt(x) or ida_bytes.has_extra_cmts(x))
+            )
+            or (export_settings.export_names and ida_bytes.has_user_name(x))
+            or (export_settings.export_typed_data and ida_bytes.is_struct(x)),
+        )
+    return result
+
+
+def export_cmts(ea: int) -> list[dict]:
+    # function comments are extracted with the functions, see export_function
+    results = []
+    addr = hex(ea - base_ea)
+
+    cmt = ida_lines.get_extra_cmt(ea, ida_lines.E_PREV)
+    if cmt is not None:
+        results.append({"address": addr, "contents": cmt, "type": "pre"})
+
+    cmt = ida_lines.get_extra_cmt(ea, ida_lines.E_NEXT)
+    if cmt is not None:
+        results.append(
+            {
+                "address": addr,
+                "contents": cmt,
+                "type": "post",
+            }
         )
 
-    for slot in range(ida_moves.MAX_MARK_SLOT):
-        ea = idc.get_bookmark(slot)
-        if ea == ida_idaapi.BADADDR:
-            break
+    cmt = idc.get_cmt(ea, True)
+    if cmt is not None:
+        results.append(
+            {
+                "address": addr,
+                "contents": cmt,
+                "type": "repeatable",
+            }
+        )
 
-        ea -= base_ea
-        desc = idc.get_bookmark_desc(slot)
-        result["bookmarks"][hex(ea)] = desc
+    cmt = idc.get_cmt(ea, False)
+    if cmt is not None:
+        results.append({"address": addr, "contents": cmt, "type": "eol"})
 
-    for idx in range(ida_funcs.get_func_qty()):
-        fn = ida_funcs.getn_func(idx)
-        if fn is None:
-            continue
-
-        ea = fn.start_ea - base_ea
-
-        fn_entry = export_function(fn)
-        if len(fn_entry) >= 1:
-            result["functions"][hex(ea)] = fn_entry
-
-    for n in range(0, ida_segment.get_segm_qty()):
-        seg = ida_segment.getnseg(n)
-        seg_entry = {
-            "name": idc.get_segm_name(seg.start_ea),
-            "start_ea": hex(seg.start_ea - base_ea),
-            "end_ea": hex(seg.end_ea - base_ea),
-            "perms": "",
-        }
-
-        for perm_ida, perm_dbi in [
-            (ida_segment.SEGPERM_READ, "r"),
-            (ida_segment.SEGPERM_WRITE, "w"),
-            (ida_segment.SEGPERM_EXEC, "x"),
-        ]:
-            if seg.perm & perm_ida:
-                seg_entry["perms"] += perm_dbi
-
-        result["segments"].append(seg_entry)
-
-    idatil = ida_typeinf.get_idati()
-
-    for ti in idatil.numbered_types():
-        type_entry = export_type(ti)
-        if type_entry is not None:
-            name = ti.get_type_name()
-            if not export_settings.no_filter_templates:
-                name = normalize_templates(name)
-
-            result["datatypes"][name] = type_entry
-
-    return result
+    return results
 
 
 def export_type(ti: "ida_typeinf.tinfo_t") -> dict:
@@ -198,7 +235,29 @@ def export_type(ti: "ida_typeinf.tinfo_t") -> dict:
     return {"type": type_of_type, "decl": decl}
 
 
-def export_function(fn: "ida_funcs.func_t") -> dict:
+def export_function(fn: "ida_funcs.func_t") -> (dict, list[dict]):
+    cmts = []
+
+    cmt = ida_funcs.get_func_cmt(fn, False)
+    if cmt is not None:
+        cmts.append(
+            {
+                "address": hex(fn.start_ea - base_ea),
+                "contents": cmt,
+                "type": "func",
+            }
+        )
+
+    cmt = ida_funcs.get_func_cmt(fn, True)
+    if cmt is not None:
+        cmts.append(
+            {
+                "address": hex(fn.start_ea - base_ea),
+                "contents": cmt,
+                "type": "func_repeatable",
+            }
+        )
+
     fn_entry = {"lvars": []}
 
     if fn.get_prototype() is not None:
@@ -233,4 +292,4 @@ def export_function(fn: "ida_funcs.func_t") -> dict:
 
             fn_entry["lvars"].append(lvar)
 
-    return fn_entry
+    return fn_entry, cmts
