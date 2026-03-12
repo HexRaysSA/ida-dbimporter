@@ -84,7 +84,7 @@ def export(settings=None) -> dict:
             fn_entry, cmts = export_function(fn)
             if len(fn_entry) >= 1:
                 result["functions"][hex(ea)] = fn_entry
-            
+
             result["comments"] += cmts
 
     if settings.export_segs:
@@ -257,7 +257,6 @@ def export_function(fn: "ida_funcs.func_t") -> (dict, list[dict]):
                 "type": "func_repeatable",
             }
         )
-
 
     fn_entry = {"lvars": []}
 
